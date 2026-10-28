@@ -1,0 +1,1511 @@
+{
+  "name": "Shop Order Assistant (Instagram + WhatsApp)",
+  "nodes": [
+    {
+      "id": "5a8192a3-7525-421d-bb8b-9091dab4464d",
+      "name": "Note 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -900,
+        -200
+      ],
+      "parameters": {
+        "content": "## Shop Order Assistant\nInstagram + WhatsApp orders, read by AI, priced by code, saved to Google Sheets, confirmed to the customer and pushed to the owner on Telegram.\n\n**Setup:** edit only **Shop settings**, then add 4 credentials: Google Sheets, OpenAI, Telegram, and Meta (Header Auth: `Authorization` = `Bearer <token>`).\n\nBuilt by Spouki · hamoudiahmediyad@gmail.com",
+        "width": 520,
+        "height": 420,
+        "color": 4
+      }
+    },
+    {
+      "id": "378e80d9-9519-4bcf-a6bb-10b66ad8f623",
+      "name": "Note 1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -340,
+        -200
+      ],
+      "parameters": {
+        "content": "### 1 · Receive\nMeta posts every DM to the POST webhook. The GET webhook answers Meta's one-time verification.",
+        "width": 560,
+        "height": 700
+      }
+    },
+    {
+      "id": "d1b82037-4fde-40f8-9c86-cd455d058e80",
+      "name": "Incoming message",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "shop-orders",
+        "options": {}
+      },
+      "webhookId": "13ae3c78-c6ce-4468-b0da-8f35c4e10b4b"
+    },
+    {
+      "id": "71f89bfb-09b3-4256-a27d-72db230339f5",
+      "name": "Meta verification",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "shop-orders",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "3dba08d1-196c-4f0f-912d-acf926a7b2a2"
+    },
+    {
+      "id": "be568187-73a9-4a72-94eb-f73852d97ad6",
+      "name": "Answer verification",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -60,
+        300
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.verify_token'] === 'CHANGE_ME_VERIFY_TOKEN' ? $json.query['hub.challenge'] : 'forbidden' }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "3c9322be-d2f5-41b9-8cd9-f634deff8fb8",
+      "name": "Shop settings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Shop settings: the only node you edit to adapt this workflow to a new shop.\nreturn [{ json: {\n  shop_name: 'Nour Store',            // your shop's name, used in AI answers\n  currency: 'DA',\n  google_sheet_id: 'PASTE_YOUR_GOOGLE_SHEET_ID',\n  owner_telegram_chat_id: 'PASTE_YOUR_TELEGRAM_CHAT_ID',\n  whatsapp_phone_number_id: 'PASTE_WHATSAPP_PHONE_NUMBER_ID',\n  meta_api_version: 'v21.0',\n} }];\n"
+      }
+    },
+    {
+      "id": "b220ba71-1304-400b-9bbc-30411a4c4d4b",
+      "name": "Note 6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -200
+      ],
+      "parameters": {
+        "content": "### 2 · Understand\nCleans the message, loads the catalog, delivery fees and any unfinished order, then the AI turns Darija / French / Arabic into fields. **The AI never calculates prices.**",
+        "width": 1180,
+        "height": 700,
+        "color": 6
+      }
+    },
+    {
+      "id": "d79b5415-b535-4d80-9c54-d768bb6c0594",
+      "name": "Normalize message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Normalize message: turns a WhatsApp Cloud API or Instagram Messaging webhook\n// (or a simple test payload) into one clean shape the rest of the workflow uses.\nconst raw = $('Incoming message').first().json;\nconst body = raw.body ?? raw;\nconst out = [];\n\nfunction push(m) {\n  if (!m.text || !String(m.text).trim()) return;\n  out.push({ json: {\n    channel: m.channel,                 // whatsapp | instagram | test\n    customer_id: String(m.customer_id),\n    customer_name: m.customer_name || '',\n    business_id: m.business_id || '',   // phone_number_id (WhatsApp) or page/IG id\n    message_id: m.message_id || '',\n    text: String(m.text).trim(),\n    received_at: new Date().toISOString(),\n  }});\n}\n\n// 1) WhatsApp Cloud API\nif (body.object === 'whatsapp_business_account') {\n  for (const entry of body.entry || []) {\n    for (const change of entry.changes || []) {\n      const v = change.value || {};\n      const names = Object.fromEntries((v.contacts || []).map(c => [c.wa_id, c.profile?.name || '']));\n      for (const msg of v.messages || []) {\n        if (msg.type !== 'text') continue;          // images, voice notes etc. are skipped\n        push({\n          channel: 'whatsapp',\n          customer_id: msg.from,\n          customer_name: names[msg.from] || '',\n          business_id: v.metadata?.phone_number_id,\n          message_id: msg.id,\n          text: msg.text?.body,\n        });\n      }\n    }\n  }\n}\n// 2) Instagram Messaging (Messenger Platform)\nelse if (body.object === 'instagram' || body.object === 'page') {\n  for (const entry of body.entry || []) {\n    for (const ev of entry.messaging || []) {\n      if (!ev.message || ev.message.is_echo) continue; // ignore our own replies\n      push({\n        channel: 'instagram',\n        customer_id: ev.sender?.id,\n        business_id: ev.recipient?.id,\n        message_id: ev.message.mid,\n        text: ev.message.text,\n      });\n    }\n  }\n}\n// 3) Test payload: { \"channel\": \"test\", \"from\": \"demo-1\", \"name\": \"Amine\", \"text\": \"...\" }\nelse if (body.text) {\n  push({\n    channel: body.channel || 'test',\n    customer_id: body.from || 'test-user',\n    customer_name: body.name || '',\n    message_id: 'test-' + Date.now(),\n    text: body.text,\n  });\n}\n\n// One message per run keeps every downstream step simple; Meta rarely batches.\nreturn out.slice(0, 1);\n"
+      }
+    },
+    {
+      "id": "cf993044-b06f-4641-83a0-437d83b838fe",
+      "name": "Load catalog",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Shop settings').first().json.google_sheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Products",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "e2e6f2e8-17da-455f-a5c4-5ce4bb3dca38",
+      "name": "Load delivery fees",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        740,
+        0
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Shop settings').first().json.google_sheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Delivery",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "e0f1488b-e0df-433a-a30e-b9fd249936dc",
+      "name": "Find pending order",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        960,
+        0
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Shop settings').first().json.google_sheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Orders",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "customer_id",
+              "lookupValue": "={{ $('Normalize message').first().json.customer_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "75037fff-a188-4063-a486-30165d9c1b6c",
+      "name": "Build AI context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Build AI context: one item holding the customer message plus the shop catalog\n// and delivery zones, written as short text the AI can read.\nconst msg = $('Normalize message').first().json;\nconst products = $('Load catalog').all().map(i => i.json)\n  .filter(p => p.sku && String(p.in_stock).toLowerCase() !== 'no');\nconst zones = $('Load delivery fees').all().map(i => i.json).filter(z => z.wilaya);\n\nconst catalogText = products.map(p =>\n  `- ${p.sku}: ${p.name} | ${p.price_dzd} DA | sizes: ${p.sizes || 'one size'} | colors: ${p.colors || 'one color'}` +\n  (p.aliases ? ` | customers also say: ${p.aliases}` : '')\n).join('\\n');\n\nconst wilayaList = zones.map(z => z.wilaya).join(', ');\nconst deliveryText = zones.map(z => `${z.wilaya} ${z.fee_dzd} DA`).join(', ');\n\n// A draft this customer left unfinished, so a follow-up like \"L, cité 1000 logements\" completes it\nconst pending = $('Find pending order').all().map(i => i.json)\n  .filter(r => r.order_id && String(r.customer_id) === String(msg.customer_id) && r.status === 'Waiting for info')\n  .pop();\nconst pendingText = pending\n  ? `${pending.items || 'no items yet'}; wilaya: ${pending.wilaya || '?'}; address: ${pending.address || '?'}; phone: ${pending.phone || '?'}; still missing: ${pending.missing || '?'}`\n  : 'none';\n\nreturn [{ json: {\n  ...msg,\n  catalog_text: catalogText,\n  wilaya_list: wilayaList,\n  delivery_text: deliveryText,\n  pending_order_id: pending ? pending.order_id : '',\n  pending_text: pendingText,\n  shop_name: $('Shop settings').first().json.shop_name,\n}}];\n"
+      }
+    },
+    {
+      "id": "6890ee8d-12df-4e15-b120-b0eac0c442e3",
+      "name": "Understand message",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        1400,
+        0
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Catalog:\n{{ $json.catalog_text }}\n\nWilayas: {{ $json.wilaya_list }}\n\nPending draft from this customer: {{ $json.pending_text }}\nProfile name: {{ $json.customer_name }}\n\nMessage:\n\"\"\"{{ $json.text }}\"\"\"",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You read customer messages for {{ $json.shop_name }}, an online clothing shop in Algeria.\nMessages can be in Algerian Darija (Arabic letters, or Latin letters with digits like 3, 7, 9), French, Arabic or English, often mixed.\nFill the JSON fields only. Rules:\n- intent: \"order\" when the customer wants to buy (even if details are missing), \"question\" for price, size, stock or delivery questions without ordering, \"other\" for complaints, returns, or anything else.\n- items: map each product to a SKU from the catalog. Never invent products. size and color must be values listed for that product, otherwise leave them empty. quantity defaults to 1.\n- wilaya: exactly one name from the wilaya list, or empty. Recognise spellings like \"bjaya\", \"dzayer\" (Alger), \"wahran\" (Oran).\n- phone: the digits as written, or empty. address: the street / district part only.\n- language: the language the customer mostly wrote in: darija, arabic, french or english.\n- If a pending draft is given, merge it with the new message: keep earlier details unless the customer changes them."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c0c27362-81b8-4f56-9e7c-11e63d0cb900",
+      "name": "OpenAI model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        240
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0
+        }
+      }
+    },
+    {
+      "id": "1956c258-4adb-4e33-9700-a058e8daea23",
+      "name": "Order fields",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1520,
+        240
+      ],
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"intent\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"order\",\n        \"question\",\n        \"other\"\n      ]\n    },\n    \"language\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"darija\",\n        \"arabic\",\n        \"french\",\n        \"english\"\n      ]\n    },\n    \"customer_name\": {\n      \"type\": \"string\"\n    },\n    \"phone\": {\n      \"type\": \"string\"\n    },\n    \"wilaya\": {\n      \"type\": \"string\"\n    },\n    \"address\": {\n      \"type\": \"string\"\n    },\n    \"question\": {\n      \"type\": \"string\"\n    },\n    \"items\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"sku\": {\n            \"type\": \"string\"\n          },\n          \"product_name\": {\n            \"type\": \"string\"\n          },\n          \"size\": {\n            \"type\": \"string\"\n          },\n          \"color\": {\n            \"type\": \"string\"\n          },\n          \"quantity\": {\n            \"type\": \"integer\"\n          }\n        }\n      }\n    }\n  },\n  \"required\": [\n    \"intent\",\n    \"language\",\n    \"items\"\n  ]\n}"
+      }
+    },
+    {
+      "id": "dcc1ca2d-5800-4a42-8440-548e95311b98",
+      "name": "Note 15",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1460,
+        -560
+      ],
+      "parameters": {
+        "content": "### 3 · Decide & price\nPlain code matches the catalog, adds delivery by wilaya, checks the Algerian phone number and lists what is missing, then routes the conversation.",
+        "width": 520,
+        "height": 320,
+        "color": 5
+      }
+    },
+    {
+      "id": "aa61a8c7-5bc6-451e-8712-1a384456c8f3",
+      "name": "Check & price order",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Check & price order: the AI only reads the message. All prices, totals and\n// validation happen here in plain code, so a customer never gets a wrong price.\nconst ctx = $('Build AI context').first().json;\nconst ai = $input.first().json.output ?? $input.first().json;\nconst settings = $('Shop settings').first().json;\n\nconst products = $('Load catalog').all().map(i => i.json);\nconst zones = $('Load delivery fees').all().map(i => i.json);\n\nconst norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '')\n  .toLowerCase().replace(/[^a-z0-9؀-ۿ]+/g, ' ').trim();\nconst list = s => String(s ?? '').split(',').map(x => x.trim()).filter(Boolean);\n\n// ---- items -------------------------------------------------------------\nconst lines = [];\nconst problems = [];\nfor (const it of ai.items || []) {\n  const p = products.find(x => norm(x.sku) === norm(it.sku)) ||\n            products.find(x => norm(x.name) === norm(it.product_name));\n  if (!p) { problems.push(`unknown product \"${it.product_name || it.sku}\"`); continue; }\n  if (String(p.in_stock).toLowerCase() === 'no') { problems.push(`${p.name} is out of stock`); continue; }\n  const qty = Math.max(1, parseInt(it.quantity, 10) || 1);\n  const sizes = list(p.sizes), colors = list(p.colors);\n  const size = sizes.find(s => norm(s) === norm(it.size)) || (sizes.length <= 1 ? (sizes[0] || '') : '');\n  const color = colors.find(c => norm(c) === norm(it.color)) || (colors.length <= 1 ? (colors[0] || '') : '');\n  const unit = Number(String(p.price_dzd).replace(/[^\\d.]/g, '')) || 0;\n  lines.push({ sku: p.sku, name: p.name, size, color, qty, unit_price: unit, line_total: unit * qty,\n               needs_size: !size && sizes.length > 1, needs_color: !color && colors.length > 1 });\n}\n\n// ---- customer details ---------------------------------------------------\nlet phone = String(ai.phone ?? '').replace(/[\\s.\\-()]/g, '');\nif (phone.startsWith('+213')) phone = '0' + phone.slice(4);\nif (phone.startsWith('00213')) phone = '0' + phone.slice(5);\nif (!phone && ctx.channel === 'whatsapp' && ctx.customer_id.startsWith('213')) phone = '0' + ctx.customer_id.slice(3);\nconst phoneOk = /^0[5-7]\\d{8}$/.test(phone);\n\nconst zone = zones.find(z => norm(z.wilaya) === norm(ai.wilaya));\nconst delivery = zone ? Number(String(zone.fee_dzd).replace(/[^\\d.]/g, '')) || 0 : 0;\nconst address = String(ai.address ?? '').trim();\n\n// ---- what is still missing ---------------------------------------------\nconst missing = [];\nif (!lines.length) missing.push('product');\nif (lines.some(l => l.needs_size)) missing.push('size');\nif (lines.some(l => l.needs_color)) missing.push('color');\nif (!phoneOk) missing.push('phone');\nif (!zone) missing.push('wilaya');\nif (!address) missing.push('address');\n\nconst subtotal = lines.reduce((s, l) => s + l.line_total, 0);\nconst d = new Date();\nconst orderId = ctx.pending_order_id || 'ORD-' + d.toISOString().slice(2, 10).replace(/-/g, '') + '-' + String(Math.floor(1000 + Math.random() * 9000));\n\nlet route = 'handoff';\nif (ai.intent === 'order') route = missing.length ? 'order_missing_info' : 'order_complete';\nelse if (ai.intent === 'question') route = 'question';\nif (ai.intent === 'order' && problems.length && !lines.length) route = 'handoff';\n\nreturn [{ json: {\n  route,\n  order_id: orderId,\n  channel: ctx.channel,\n  customer_id: ctx.customer_id,\n  business_id: ctx.business_id,\n  customer_name: ai.customer_name || ctx.customer_name || '',\n  language: ai.language || 'french',\n  phone: phoneOk ? phone : '',\n  wilaya: zone ? zone.wilaya : (ai.wilaya || ''),\n  address,\n  lines,\n  items_text: lines.map(l => `${l.qty} x ${l.name}${l.size ? ' ' + l.size : ''}${l.color ? ' ' + l.color : ''}`).join(' + '),\n  subtotal_dzd: subtotal,\n  delivery_dzd: delivery,\n  total_dzd: subtotal + delivery,\n  missing,\n  problems,\n  question: ai.question || '',\n  original_message: ctx.text,\n  currency: settings.currency || 'DA',\n  created_at: d.toISOString(),\n}}];\n"
+      }
+    },
+    {
+      "id": "2b978759-4a3a-454c-85c1-6cbd3eba4134",
+      "name": "Route by intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1880,
+        0
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "dace8f1a-6239-476c-a82a-f9324847e37f",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "order_complete",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Order complete"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "f483f0bc-74aa-424b-a837-143e66de6d41",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "order_missing_info",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Needs info"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "09cd2281-908f-4b0d-9509-fcc47a5c7966",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "question",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Question"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6a688dc6-5965-4667-8fec-7bbcbec12116",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "handoff",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Human"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Other"
+        }
+      }
+    },
+    {
+      "id": "0a1b6e72-45c5-4970-b993-eb49b988906f",
+      "name": "Note 18",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        -560
+      ],
+      "parameters": {
+        "content": "### 4 · Act\nComplete orders are saved and the owner is alerted. Drafts wait for the missing details. Questions are answered from the catalog. Anything else goes to a human.",
+        "width": 760,
+        "height": 1300,
+        "color": 3
+      }
+    },
+    {
+      "id": "6fabdb25-791b-4d34-8d55-b9dfdc4d37cd",
+      "name": "Save order",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2140,
+        -260
+      ],
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Shop settings').first().json.google_sheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Orders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "order_id": "={{ $json.order_id }}",
+            "created_at": "={{ $json.created_at }}",
+            "channel": "={{ $json.channel }}",
+            "customer_id": "={{ $json.customer_id }}",
+            "customer_name": "={{ $json.customer_name }}",
+            "phone": "={{ $json.phone }}",
+            "wilaya": "={{ $json.wilaya }}",
+            "address": "={{ $json.address }}",
+            "items": "={{ $json.items_text }}",
+            "subtotal_dzd": "={{ $json.subtotal_dzd }}",
+            "delivery_dzd": "={{ $json.delivery_dzd }}",
+            "total_dzd": "={{ $json.total_dzd }}",
+            "missing": "={{ $json.missing.join(', ') }}",
+            "original_message": "={{ $json.original_message }}",
+            "status": "New"
+          },
+          "matchingColumns": [
+            "order_id"
+          ],
+          "schema": [
+            {
+              "id": "order_id",
+              "displayName": "order_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_id",
+              "displayName": "customer_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_name",
+              "displayName": "customer_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "wilaya",
+              "displayName": "wilaya",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "address",
+              "displayName": "address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "items",
+              "displayName": "items",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "subtotal_dzd",
+              "displayName": "subtotal_dzd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "delivery_dzd",
+              "displayName": "delivery_dzd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_dzd",
+              "displayName": "total_dzd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "missing",
+              "displayName": "missing",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "original_message",
+              "displayName": "original_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b201a82d-f635-480a-98b1-1c25ca38e437",
+      "name": "Alert owner: new order",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2400,
+        -400
+      ],
+      "parameters": {
+        "chatId": "={{ $('Shop settings').first().json.owner_telegram_chat_id }}",
+        "text": "=🛍 New order · {{ $('Check & price order').first().json.total_dzd }} DA\n{{ $('Check & price order').first().json.order_id }}\n{{ $('Check & price order').first().json.customer_name }} · {{ $('Check & price order').first().json.phone }}\n{{ $('Check & price order').first().json.items_text }}\nDeliver to {{ $('Check & price order').first().json.wilaya }}, {{ $('Check & price order').first().json.address }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      }
+    },
+    {
+      "id": "be750186-296b-4f9c-a85f-87386dd1334a",
+      "name": "Confirmation reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        -200
+      ],
+      "parameters": {
+        "jsCode": "// Shared reply templates. Each reply node pastes the block it needs; kept in one\n// file here so the wording stays consistent across French, Arabic, Darija and English.\nconst T = {\n  french: {\n    hello: n => `Merci${n ? ' ' + n : ''} !`,\n    confirm: o => `Votre commande ${o.order_id} est bien enregistrée :\\n${o.items_text}\\nSous-total : ${fmt(o.subtotal_dzd)} DA\\nLivraison ${o.wilaya} : ${fmt(o.delivery_dzd)} DA\\nTotal : ${fmt(o.total_dzd)} DA, paiement à la livraison.\\nNous vous appelons au ${o.phone} pour confirmer.`,\n    ask: m => `Pour finaliser votre commande, il nous manque : ${m.join(', ')}.`,\n    words: { product: 'le produit', size: 'la taille', color: 'la couleur', phone: 'votre numéro de téléphone', wilaya: 'votre wilaya', address: 'votre adresse' },\n    handoff: `Merci pour votre message. Un membre de l'équipe vous répond très vite.`,\n  },\n  arabic: {\n    hello: n => `شكراً${n ? ' ' + n : ''}!`,\n    confirm: o => `تم تسجيل طلبك ${o.order_id}:\\n${o.items_text}\\nالمجموع: ${fmt(o.subtotal_dzd)} دج\\nالتوصيل إلى ${o.wilaya}: ${fmt(o.delivery_dzd)} دج\\nالإجمالي: ${fmt(o.total_dzd)} دج، الدفع عند الاستلام.\\nسنتصل بك على ${o.phone} للتأكيد.`,\n    ask: m => `لإكمال طلبك نحتاج: ${m.join('، ')}.`,\n    words: { product: 'المنتج', size: 'المقاس', color: 'اللون', phone: 'رقم الهاتف', wilaya: 'الولاية', address: 'العنوان' },\n    handoff: 'شكراً على رسالتك، سيرد عليك أحد أفراد الفريق قريباً.',\n  },\n  darija: {\n    hello: n => `Saha${n ? ' ' + n : ''} !`,\n    confirm: o => `Commande ${o.order_id} tsejlet :\\n${o.items_text}\\nSous-total : ${fmt(o.subtotal_dzd)} DA\\nLivraison l ${o.wilaya} : ${fmt(o.delivery_dzd)} DA\\nTotal : ${fmt(o.total_dzd)} DA, khlas ki tjik.\\nN3aytoulek 3la ${o.phone} bach nconfirmiw.`,\n    ask: m => `Bach nkemlou la commande, ba9i ykhessna : ${m.join(', ')}.`,\n    words: { product: 'wech men produit', size: 'la taille', color: 'la couleur', phone: 'numéro ta3ek', wilaya: 'la wilaya', address: \"l'adresse\" },\n    handoff: 'Saha 3la message ta3ek, wahed men l\\'équipe yreplik doka.',\n  },\n  english: {\n    hello: n => `Thanks${n ? ' ' + n : ''}!`,\n    confirm: o => `Your order ${o.order_id} is confirmed:\\n${o.items_text}\\nSubtotal: ${fmt(o.subtotal_dzd)} DA\\nDelivery to ${o.wilaya}: ${fmt(o.delivery_dzd)} DA\\nTotal: ${fmt(o.total_dzd)} DA, cash on delivery.\\nWe'll call you on ${o.phone} to confirm.`,\n    ask: m => `To finish your order we still need: ${m.join(', ')}.`,\n    words: { product: 'the product', size: 'the size', color: 'the colour', phone: 'your phone number', wilaya: 'your wilaya', address: 'your address' },\n    handoff: 'Thanks for your message. Someone from the team will reply shortly.',\n  },\n};\nfunction fmt(n) { return Number(n || 0).toLocaleString('fr-FR').replace(/ | /g, ' '); }\nfunction lang(o) { return T[o.language] ? o.language : 'french'; }\n\nconst o = $('Check & price order').first().json;\nconst L = T[lang(o)];\nreturn [{ json: { ...o, reply_type: 'order_confirmed', reply_text: L.hello(o.customer_name) + '\\n' + L.confirm(o) } }];\n"
+      }
+    },
+    {
+      "id": "3644fe28-f031-4df5-9ac5-2545caa3ebf3",
+      "name": "Save draft order",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2140,
+        0
+      ],
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Shop settings').first().json.google_sheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Orders",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "order_id": "={{ $json.order_id }}",
+            "created_at": "={{ $json.created_at }}",
+            "channel": "={{ $json.channel }}",
+            "customer_id": "={{ $json.customer_id }}",
+            "customer_name": "={{ $json.customer_name }}",
+            "phone": "={{ $json.phone }}",
+            "wilaya": "={{ $json.wilaya }}",
+            "address": "={{ $json.address }}",
+            "items": "={{ $json.items_text }}",
+            "subtotal_dzd": "={{ $json.subtotal_dzd }}",
+            "delivery_dzd": "={{ $json.delivery_dzd }}",
+            "total_dzd": "={{ $json.total_dzd }}",
+            "missing": "={{ $json.missing.join(', ') }}",
+            "original_message": "={{ $json.original_message }}",
+            "status": "Waiting for info"
+          },
+          "matchingColumns": [
+            "order_id"
+          ],
+          "schema": [
+            {
+              "id": "order_id",
+              "displayName": "order_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_id",
+              "displayName": "customer_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_name",
+              "displayName": "customer_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "wilaya",
+              "displayName": "wilaya",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "address",
+              "displayName": "address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "items",
+              "displayName": "items",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "subtotal_dzd",
+              "displayName": "subtotal_dzd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "delivery_dzd",
+              "displayName": "delivery_dzd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_dzd",
+              "displayName": "total_dzd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "missing",
+              "displayName": "missing",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "original_message",
+              "displayName": "original_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f588ff0b-7ab9-4d83-9f5a-1c435cc3a559",
+      "name": "Ask for missing info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Shared reply templates. Each reply node pastes the block it needs; kept in one\n// file here so the wording stays consistent across French, Arabic, Darija and English.\nconst T = {\n  french: {\n    hello: n => `Merci${n ? ' ' + n : ''} !`,\n    confirm: o => `Votre commande ${o.order_id} est bien enregistrée :\\n${o.items_text}\\nSous-total : ${fmt(o.subtotal_dzd)} DA\\nLivraison ${o.wilaya} : ${fmt(o.delivery_dzd)} DA\\nTotal : ${fmt(o.total_dzd)} DA, paiement à la livraison.\\nNous vous appelons au ${o.phone} pour confirmer.`,\n    ask: m => `Pour finaliser votre commande, il nous manque : ${m.join(', ')}.`,\n    words: { product: 'le produit', size: 'la taille', color: 'la couleur', phone: 'votre numéro de téléphone', wilaya: 'votre wilaya', address: 'votre adresse' },\n    handoff: `Merci pour votre message. Un membre de l'équipe vous répond très vite.`,\n  },\n  arabic: {\n    hello: n => `شكراً${n ? ' ' + n : ''}!`,\n    confirm: o => `تم تسجيل طلبك ${o.order_id}:\\n${o.items_text}\\nالمجموع: ${fmt(o.subtotal_dzd)} دج\\nالتوصيل إلى ${o.wilaya}: ${fmt(o.delivery_dzd)} دج\\nالإجمالي: ${fmt(o.total_dzd)} دج، الدفع عند الاستلام.\\nسنتصل بك على ${o.phone} للتأكيد.`,\n    ask: m => `لإكمال طلبك نحتاج: ${m.join('، ')}.`,\n    words: { product: 'المنتج', size: 'المقاس', color: 'اللون', phone: 'رقم الهاتف', wilaya: 'الولاية', address: 'العنوان' },\n    handoff: 'شكراً على رسالتك، سيرد عليك أحد أفراد الفريق قريباً.',\n  },\n  darija: {\n    hello: n => `Saha${n ? ' ' + n : ''} !`,\n    confirm: o => `Commande ${o.order_id} tsejlet :\\n${o.items_text}\\nSous-total : ${fmt(o.subtotal_dzd)} DA\\nLivraison l ${o.wilaya} : ${fmt(o.delivery_dzd)} DA\\nTotal : ${fmt(o.total_dzd)} DA, khlas ki tjik.\\nN3aytoulek 3la ${o.phone} bach nconfirmiw.`,\n    ask: m => `Bach nkemlou la commande, ba9i ykhessna : ${m.join(', ')}.`,\n    words: { product: 'wech men produit', size: 'la taille', color: 'la couleur', phone: 'numéro ta3ek', wilaya: 'la wilaya', address: \"l'adresse\" },\n    handoff: 'Saha 3la message ta3ek, wahed men l\\'équipe yreplik doka.',\n  },\n  english: {\n    hello: n => `Thanks${n ? ' ' + n : ''}!`,\n    confirm: o => `Your order ${o.order_id} is confirmed:\\n${o.items_text}\\nSubtotal: ${fmt(o.subtotal_dzd)} DA\\nDelivery to ${o.wilaya}: ${fmt(o.delivery_dzd)} DA\\nTotal: ${fmt(o.total_dzd)} DA, cash on delivery.\\nWe'll call you on ${o.phone} to confirm.`,\n    ask: m => `To finish your order we still need: ${m.join(', ')}.`,\n    words: { product: 'the product', size: 'the size', color: 'the colour', phone: 'your phone number', wilaya: 'your wilaya', address: 'your address' },\n    handoff: 'Thanks for your message. Someone from the team will reply shortly.',\n  },\n};\nfunction fmt(n) { return Number(n || 0).toLocaleString('fr-FR').replace(/ | /g, ' '); }\nfunction lang(o) { return T[o.language] ? o.language : 'french'; }\n\nconst o = $('Check & price order').first().json;\nconst L = T[lang(o)];\nconst need = o.missing.map(k => L.words[k] || k);\nconst sofar = o.items_text ? `\\n(${o.items_text})` : '';\nreturn [{ json: { ...o, reply_type: 'asked_missing_info', reply_text: L.hello(o.customer_name) + ' ' + L.ask(need) + sofar } }];\n"
+      }
+    },
+    {
+      "id": "3890fa2c-329c-4183-b773-835a683398ed",
+      "name": "Answer question",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        2140,
+        240
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Catalog:\n{{ $('Build AI context').first().json.catalog_text }}\n\nDelivery fees by wilaya: {{ $('Build AI context').first().json.delivery_text }}\nPayment: cash on delivery.\n\nCustomer question ({{ $json.language }}):\n\"\"\"{{ $json.original_message }}\"\"\"",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You answer customers for {{ $('Shop settings').first().json.shop_name }}. Reply in the same language and script the customer used, in 1 to 3 short sentences, using only the catalog and delivery information given. Prices are in DA. If the answer is not in that information, say a team member will reply soon. Never invent discounts or stock."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a2f6e7ee-2134-4f47-98e2-47da627b4375",
+      "name": "OpenAI model (answers)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2140,
+        460
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      }
+    },
+    {
+      "id": "bc12cd0d-572f-436e-8289-57c22ff4718c",
+      "name": "Format answer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        240
+      ],
+      "parameters": {
+        "jsCode": "// Shared reply templates. Each reply node pastes the block it needs; kept in one\n// file here so the wording stays consistent across French, Arabic, Darija and English.\nconst T = {\n  french: {\n    hello: n => `Merci${n ? ' ' + n : ''} !`,\n    confirm: o => `Votre commande ${o.order_id} est bien enregistrée :\\n${o.items_text}\\nSous-total : ${fmt(o.subtotal_dzd)} DA\\nLivraison ${o.wilaya} : ${fmt(o.delivery_dzd)} DA\\nTotal : ${fmt(o.total_dzd)} DA, paiement à la livraison.\\nNous vous appelons au ${o.phone} pour confirmer.`,\n    ask: m => `Pour finaliser votre commande, il nous manque : ${m.join(', ')}.`,\n    words: { product: 'le produit', size: 'la taille', color: 'la couleur', phone: 'votre numéro de téléphone', wilaya: 'votre wilaya', address: 'votre adresse' },\n    handoff: `Merci pour votre message. Un membre de l'équipe vous répond très vite.`,\n  },\n  arabic: {\n    hello: n => `شكراً${n ? ' ' + n : ''}!`,\n    confirm: o => `تم تسجيل طلبك ${o.order_id}:\\n${o.items_text}\\nالمجموع: ${fmt(o.subtotal_dzd)} دج\\nالتوصيل إلى ${o.wilaya}: ${fmt(o.delivery_dzd)} دج\\nالإجمالي: ${fmt(o.total_dzd)} دج، الدفع عند الاستلام.\\nسنتصل بك على ${o.phone} للتأكيد.`,\n    ask: m => `لإكمال طلبك نحتاج: ${m.join('، ')}.`,\n    words: { product: 'المنتج', size: 'المقاس', color: 'اللون', phone: 'رقم الهاتف', wilaya: 'الولاية', address: 'العنوان' },\n    handoff: 'شكراً على رسالتك، سيرد عليك أحد أفراد الفريق قريباً.',\n  },\n  darija: {\n    hello: n => `Saha${n ? ' ' + n : ''} !`,\n    confirm: o => `Commande ${o.order_id} tsejlet :\\n${o.items_text}\\nSous-total : ${fmt(o.subtotal_dzd)} DA\\nLivraison l ${o.wilaya} : ${fmt(o.delivery_dzd)} DA\\nTotal : ${fmt(o.total_dzd)} DA, khlas ki tjik.\\nN3aytoulek 3la ${o.phone} bach nconfirmiw.`,\n    ask: m => `Bach nkemlou la commande, ba9i ykhessna : ${m.join(', ')}.`,\n    words: { product: 'wech men produit', size: 'la taille', color: 'la couleur', phone: 'numéro ta3ek', wilaya: 'la wilaya', address: \"l'adresse\" },\n    handoff: 'Saha 3la message ta3ek, wahed men l\\'équipe yreplik doka.',\n  },\n  english: {\n    hello: n => `Thanks${n ? ' ' + n : ''}!`,\n    confirm: o => `Your order ${o.order_id} is confirmed:\\n${o.items_text}\\nSubtotal: ${fmt(o.subtotal_dzd)} DA\\nDelivery to ${o.wilaya}: ${fmt(o.delivery_dzd)} DA\\nTotal: ${fmt(o.total_dzd)} DA, cash on delivery.\\nWe'll call you on ${o.phone} to confirm.`,\n    ask: m => `To finish your order we still need: ${m.join(', ')}.`,\n    words: { product: 'the product', size: 'the size', color: 'the colour', phone: 'your phone number', wilaya: 'your wilaya', address: 'your address' },\n    handoff: 'Thanks for your message. Someone from the team will reply shortly.',\n  },\n};\nfunction fmt(n) { return Number(n || 0).toLocaleString('fr-FR').replace(/ | /g, ' '); }\nfunction lang(o) { return T[o.language] ? o.language : 'french'; }\n\nconst o = $('Check & price order').first().json;\nconst answer = String($input.first().json.text || '').trim();\nconst L = T[lang(o)];\nreturn [{ json: { ...o, reply_type: 'answered_question', reply_text: answer || L.handoff } }];\n"
+      }
+    },
+    {
+      "id": "a41c9a10-2f1d-49b0-a832-b3e01b8b216b",
+      "name": "Alert owner: needs a human",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2140,
+        620
+      ],
+      "parameters": {
+        "chatId": "={{ $('Shop settings').first().json.owner_telegram_chat_id }}",
+        "text": "=🙋 A customer needs you ({{ $json.channel }})\n{{ $json.customer_name || $json.customer_id }}:\n\"{{ $json.original_message }}\"",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      }
+    },
+    {
+      "id": "efff4bc2-267d-4ae7-9e6e-c54d22cbb097",
+      "name": "Handoff reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        620
+      ],
+      "parameters": {
+        "jsCode": "// Shared reply templates. Each reply node pastes the block it needs; kept in one\n// file here so the wording stays consistent across French, Arabic, Darija and English.\nconst T = {\n  french: {\n    hello: n => `Merci${n ? ' ' + n : ''} !`,\n    confirm: o => `Votre commande ${o.order_id} est bien enregistrée :\\n${o.items_text}\\nSous-total : ${fmt(o.subtotal_dzd)} DA\\nLivraison ${o.wilaya} : ${fmt(o.delivery_dzd)} DA\\nTotal : ${fmt(o.total_dzd)} DA, paiement à la livraison.\\nNous vous appelons au ${o.phone} pour confirmer.`,\n    ask: m => `Pour finaliser votre commande, il nous manque : ${m.join(', ')}.`,\n    words: { product: 'le produit', size: 'la taille', color: 'la couleur', phone: 'votre numéro de téléphone', wilaya: 'votre wilaya', address: 'votre adresse' },\n    handoff: `Merci pour votre message. Un membre de l'équipe vous répond très vite.`,\n  },\n  arabic: {\n    hello: n => `شكراً${n ? ' ' + n : ''}!`,\n    confirm: o => `تم تسجيل طلبك ${o.order_id}:\\n${o.items_text}\\nالمجموع: ${fmt(o.subtotal_dzd)} دج\\nالتوصيل إلى ${o.wilaya}: ${fmt(o.delivery_dzd)} دج\\nالإجمالي: ${fmt(o.total_dzd)} دج، الدفع عند الاستلام.\\nسنتصل بك على ${o.phone} للتأكيد.`,\n    ask: m => `لإكمال طلبك نحتاج: ${m.join('، ')}.`,\n    words: { product: 'المنتج', size: 'المقاس', color: 'اللون', phone: 'رقم الهاتف', wilaya: 'الولاية', address: 'العنوان' },\n    handoff: 'شكراً على رسالتك، سيرد عليك أحد أفراد الفريق قريباً.',\n  },\n  darija: {\n    hello: n => `Saha${n ? ' ' + n : ''} !`,\n    confirm: o => `Commande ${o.order_id} tsejlet :\\n${o.items_text}\\nSous-total : ${fmt(o.subtotal_dzd)} DA\\nLivraison l ${o.wilaya} : ${fmt(o.delivery_dzd)} DA\\nTotal : ${fmt(o.total_dzd)} DA, khlas ki tjik.\\nN3aytoulek 3la ${o.phone} bach nconfirmiw.`,\n    ask: m => `Bach nkemlou la commande, ba9i ykhessna : ${m.join(', ')}.`,\n    words: { product: 'wech men produit', size: 'la taille', color: 'la couleur', phone: 'numéro ta3ek', wilaya: 'la wilaya', address: \"l'adresse\" },\n    handoff: 'Saha 3la message ta3ek, wahed men l\\'équipe yreplik doka.',\n  },\n  english: {\n    hello: n => `Thanks${n ? ' ' + n : ''}!`,\n    confirm: o => `Your order ${o.order_id} is confirmed:\\n${o.items_text}\\nSubtotal: ${fmt(o.subtotal_dzd)} DA\\nDelivery to ${o.wilaya}: ${fmt(o.delivery_dzd)} DA\\nTotal: ${fmt(o.total_dzd)} DA, cash on delivery.\\nWe'll call you on ${o.phone} to confirm.`,\n    ask: m => `To finish your order we still need: ${m.join(', ')}.`,\n    words: { product: 'the product', size: 'the size', color: 'the colour', phone: 'your phone number', wilaya: 'your wilaya', address: 'your address' },\n    handoff: 'Thanks for your message. Someone from the team will reply shortly.',\n  },\n};\nfunction fmt(n) { return Number(n || 0).toLocaleString('fr-FR').replace(/ | /g, ' '); }\nfunction lang(o) { return T[o.language] ? o.language : 'french'; }\n\nconst o = $('Check & price order').first().json;\nconst L = T[lang(o)];\nreturn [{ json: { ...o, reply_type: 'handoff', reply_text: L.handoff } }];\n"
+      }
+    },
+    {
+      "id": "bd42c93d-5b30-46c4-b99b-a7cb7ab0eca5",
+      "name": "Note 29",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2860,
+        -200
+      ],
+      "parameters": {
+        "content": "### 5 · Reply\nSends the reply on the same channel and logs the conversation. Test messages (channel `test`) are logged but not sent.",
+        "width": 760,
+        "height": 700
+      }
+    },
+    {
+      "id": "241bb189-c0aa-4c2e-9fa4-b02cd1629d4b",
+      "name": "Prepare reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2920,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Prepare reply: every branch arrives here with { reply_text } plus the order\n// data; this builds the exact API body for the customer's channel.\nconst o = $input.first().json;\nconst text = String(o.reply_text || '').slice(0, 1000);\nlet api_body = {};\nif (o.channel === 'whatsapp') {\n  api_body = { messaging_product: 'whatsapp', to: o.customer_id, type: 'text', text: { body: text } };\n} else if (o.channel === 'instagram') {\n  api_body = { recipient: { id: o.customer_id }, message: { text } };\n}\nreturn [{ json: { ...o, reply_text: text, api_body } }];\n"
+      }
+    },
+    {
+      "id": "7cff171e-dfb6-422a-a8a4-c817da64515a",
+      "name": "Send by channel",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        3140,
+        0
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "2301a2bc-3ffa-4d2d-95e9-87c11b130069",
+                    "leftValue": "={{ $json.channel }}",
+                    "rightValue": "whatsapp",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "WhatsApp"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "abe8ffe3-aec8-4900-b776-2a6137cb3245",
+                    "leftValue": "={{ $json.channel }}",
+                    "rightValue": "instagram",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Instagram"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Other"
+        }
+      }
+    },
+    {
+      "id": "bb062948-97b7-4f16-9416-247b21341015",
+      "name": "Send WhatsApp reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3400,
+        -140
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $('Shop settings').first().json.meta_api_version }}/{{ $('Shop settings').first().json.whatsapp_phone_number_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.api_body) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "c85f2157-afdc-4ec2-975c-f00bf377ba96",
+      "name": "Send Instagram reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3400,
+        40
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $('Shop settings').first().json.meta_api_version }}/me/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.api_body) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "5b3ed9d3-0004-41cd-a224-5e422b427f4f",
+      "name": "Test mode: not sent",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        3400,
+        220
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "e8cd07ec-e335-4bd6-b417-a5f99ff15d96",
+      "name": "Log conversation",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3140,
+        300
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Shop settings').first().json.google_sheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Inbox",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "received_at": "={{ $json.created_at }}",
+            "channel": "={{ $json.channel }}",
+            "customer_id": "={{ $json.customer_id }}",
+            "customer_name": "={{ $json.customer_name }}",
+            "message": "={{ $json.original_message }}",
+            "route": "={{ $json.reply_type }}",
+            "reply": "={{ $json.reply_text }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "received_at",
+              "displayName": "received_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_id",
+              "displayName": "customer_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_name",
+              "displayName": "customer_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "route",
+              "displayName": "route",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reply",
+              "displayName": "reply",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Meta verification": {
+      "main": [
+        [
+          {
+            "node": "Answer verification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Incoming message": {
+      "main": [
+        [
+          {
+            "node": "Shop settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shop settings": {
+      "main": [
+        [
+          {
+            "node": "Normalize message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize message": {
+      "main": [
+        [
+          {
+            "node": "Load catalog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load catalog": {
+      "main": [
+        [
+          {
+            "node": "Load delivery fees",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load delivery fees": {
+      "main": [
+        [
+          {
+            "node": "Find pending order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find pending order": {
+      "main": [
+        [
+          {
+            "node": "Build AI context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build AI context": {
+      "main": [
+        [
+          {
+            "node": "Understand message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Understand message",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Order fields": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Understand message",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Understand message": {
+      "main": [
+        [
+          {
+            "node": "Check & price order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check & price order": {
+      "main": [
+        [
+          {
+            "node": "Route by intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by intent": {
+      "main": [
+        [
+          {
+            "node": "Save order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save draft order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Answer question",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert owner: needs a human",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert owner: needs a human",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save order": {
+      "main": [
+        [
+          {
+            "node": "Alert owner: new order",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Confirmation reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save draft order": {
+      "main": [
+        [
+          {
+            "node": "Ask for missing info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI model (answers)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Answer question",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer question": {
+      "main": [
+        [
+          {
+            "node": "Format answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert owner: needs a human": {
+      "main": [
+        [
+          {
+            "node": "Handoff reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmation reply": {
+      "main": [
+        [
+          {
+            "node": "Prepare reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask for missing info": {
+      "main": [
+        [
+          {
+            "node": "Prepare reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format answer": {
+      "main": [
+        [
+          {
+            "node": "Prepare reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handoff reply": {
+      "main": [
+        [
+          {
+            "node": "Prepare reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare reply": {
+      "main": [
+        [
+          {
+            "node": "Send by channel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send by channel": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Instagram reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Test mode: not sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all"
+  },
+  "pinData": {},
+  "active": false,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
