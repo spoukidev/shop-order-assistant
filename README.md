@@ -53,4 +53,3 @@ curl -X POST https://<your-n8n-domain>/webhook/shop-orders \
 - Text messages only. Voice notes and photos are skipped for now.
 - WhatsApp and Instagram let a business reply freely within 24 hours of the customer's last message, which is how this workflow uses them.
 - The delivery fees in `Delivery.csv` are example values. Replace them with your courier's prices.
-"# shop-order-assistant" 

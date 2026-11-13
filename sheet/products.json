@@ -1,0 +1,38 @@
+[
+ {
+  "sku": "HOOD-01",
+  "name": "Hoodie oversize",
+  "aliases": "hoodie, sweat, سويت, هودي",
+  "sizes": "S, M, L, XL",
+  "colors": "Noir, Blanc, Beige",
+  "price_dzd": 3500,
+  "in_stock": "yes"
+ },
+ {
+  "sku": "TEE-02",
+  "name": "T-shirt basique",
+  "aliases": "tshirt, t-shirt, maillot, تيشرت",
+  "sizes": "S, M, L, XL",
+  "colors": "Noir, Blanc",
+  "price_dzd": 1500,
+  "in_stock": "yes"
+ },
+ {
+  "sku": "JOG-03",
+  "name": "Jogger cargo",
+  "aliases": "jogging, pantalon, سروال",
+  "sizes": "S, M, L, XL",
+  "colors": "Noir, Beige, Kaki",
+  "price_dzd": 2800,
+  "in_stock": "yes"
+ },
+ {
+  "sku": "CAP-04",
+  "name": "Casquette brodée",
+  "aliases": "casquette, cap, كاسكيطة",
+  "sizes": "",
+  "colors": "Noir, Blanc",
+  "price_dzd": 1200,
+  "in_stock": "yes"
+ }
+]

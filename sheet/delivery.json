@@ -1,0 +1,292 @@
+[
+ {
+  "code": 1,
+  "wilaya": "Adrar",
+  "fee_dzd": 1200
+ },
+ {
+  "code": 2,
+  "wilaya": "Chlef",
+  "fee_dzd": 600
+ },
+ {
+  "code": 3,
+  "wilaya": "Laghouat",
+  "fee_dzd": 900
+ },
+ {
+  "code": 4,
+  "wilaya": "Oum El Bouaghi",
+  "fee_dzd": 600
+ },
+ {
+  "code": 5,
+  "wilaya": "Batna",
+  "fee_dzd": 600
+ },
+ {
+  "code": 6,
+  "wilaya": "Béjaïa",
+  "fee_dzd": 600
+ },
+ {
+  "code": 7,
+  "wilaya": "Biskra",
+  "fee_dzd": 900
+ },
+ {
+  "code": 8,
+  "wilaya": "Béchar",
+  "fee_dzd": 1200
+ },
+ {
+  "code": 9,
+  "wilaya": "Blida",
+  "fee_dzd": 400
+ },
+ {
+  "code": 10,
+  "wilaya": "Bouira",
+  "fee_dzd": 600
+ },
+ {
+  "code": 11,
+  "wilaya": "Tamanrasset",
+  "fee_dzd": 1200
+ },
+ {
+  "code": 12,
+  "wilaya": "Tébessa",
+  "fee_dzd": 600
+ },
+ {
+  "code": 13,
+  "wilaya": "Tlemcen",
+  "fee_dzd": 600
+ },
+ {
+  "code": 14,
+  "wilaya": "Tiaret",
+  "fee_dzd": 600
+ },
+ {
+  "code": 15,
+  "wilaya": "Tizi Ouzou",
+  "fee_dzd": 600
+ },
+ {
+  "code": 16,
+  "wilaya": "Alger",
+  "fee_dzd": 400
+ },
+ {
+  "code": 17,
+  "wilaya": "Djelfa",
+  "fee_dzd": 900
+ },
+ {
+  "code": 18,
+  "wilaya": "Jijel",
+  "fee_dzd": 600
+ },
+ {
+  "code": 19,
+  "wilaya": "Sétif",
+  "fee_dzd": 600
+ },
+ {
+  "code": 20,
+  "wilaya": "Saïda",
+  "fee_dzd": 600
+ },
+ {
+  "code": 21,
+  "wilaya": "Skikda",
+  "fee_dzd": 600
+ },
+ {
+  "code": 22,
+  "wilaya": "Sidi Bel Abbès",
+  "fee_dzd": 600
+ },
+ {
+  "code": 23,
+  "wilaya": "Annaba",
+  "fee_dzd": 600
+ },
+ {
+  "code": 24,
+  "wilaya": "Guelma",
+  "fee_dzd": 600
+ },
+ {
+  "code": 25,
+  "wilaya": "Constantine",
+  "fee_dzd": 600
+ },
+ {
+  "code": 26,
+  "wilaya": "Médéa",
+  "fee_dzd": 600
+ },
+ {
+  "code": 27,
+  "wilaya": "Mostaganem",
+  "fee_dzd": 600
+ },
+ {
+  "code": 28,
+  "wilaya": "M'Sila",
+  "fee_dzd": 600
+ },
+ {
+  "code": 29,
+  "wilaya": "Mascara",
+  "fee_dzd": 600
+ },
+ {
+  "code": 30,
+  "wilaya": "Ouargla",
+  "fee_dzd": 900
+ },
+ {
+  "code": 31,
+  "wilaya": "Oran",
+  "fee_dzd": 600
+ },
+ {
+  "code": 32,
+  "wilaya": "El Bayadh",
+  "fee_dzd": 900
+ },
+ {
+  "code": 33,
+  "wilaya": "Illizi",
+  "fee_dzd": 1200
+ },
+ {
+  "code": 34,
+  "wilaya": "Bordj Bou Arréridj",
+  "fee_dzd": 600
+ },
+ {
+  "code": 35,
+  "wilaya": "Boumerdès",
+  "fee_dzd": 400
+ },
+ {
+  "code": 36,
+  "wilaya": "El Tarf",
+  "fee_dzd": 600
+ },
+ {
+  "code": 37,
+  "wilaya": "Tindouf",
+  "fee_dzd": 1200
+ },
+ {
+  "code": 38,
+  "wilaya": "Tissemsilt",
+  "fee_dzd": 600
+ },
+ {
+  "code": 39,
+  "wilaya": "El Oued",
+  "fee_dzd": 900
+ },
+ {
+  "code": 40,
+  "wilaya": "Khenchela",
+  "fee_dzd": 600
+ },
+ {
+  "code": 41,
+  "wilaya": "Souk Ahras",
+  "fee_dzd": 600
+ },
+ {
+  "code": 42,
+  "wilaya": "Tipaza",
+  "fee_dzd": 400
+ },
+ {
+  "code": 43,
+  "wilaya": "Mila",
+  "fee_dzd": 600
+ },
+ {
+  "code": 44,
+  "wilaya": "Aïn Defla",
+  "fee_dzd": 600
+ },
+ {
+  "code": 45,
+  "wilaya": "Naâma",
+  "fee_dzd": 900
+ },
+ {
+  "code": 46,
+  "wilaya": "Aïn Témouchent",
+  "fee_dzd": 600
+ },
+ {
+  "code": 47,
+  "wilaya": "Ghardaïa",
+  "fee_dzd": 900
+ },
+ {
+  "code": 48,
+  "wilaya": "Relizane",
+  "fee_dzd": 600
+ },
+ {
+  "code": 49,
+  "wilaya": "Timimoun",
+  "fee_dzd": 1200
+ },
+ {
+  "code": 50,
+  "wilaya": "Bordj Badji Mokhtar",
+  "fee_dzd": 1200
+ },
+ {
+  "code": 51,
+  "wilaya": "Ouled Djellal",
+  "fee_dzd": 900
+ },
+ {
+  "code": 52,
+  "wilaya": "Béni Abbès",
+  "fee_dzd": 1200
+ },
+ {
+  "code": 53,
+  "wilaya": "In Salah",
+  "fee_dzd": 1200
+ },
+ {
+  "code": 54,
+  "wilaya": "In Guezzam",
+  "fee_dzd": 1200
+ },
+ {
+  "code": 55,
+  "wilaya": "Touggourt",
+  "fee_dzd": 900
+ },
+ {
+  "code": 56,
+  "wilaya": "Djanet",
+  "fee_dzd": 1200
+ },
+ {
+  "code": 57,
+  "wilaya": "El M'Ghair",
+  "fee_dzd": 900
+ },
+ {
+  "code": 58,
+  "wilaya": "El Meniaa",
+  "fee_dzd": 1200
+ }
+]

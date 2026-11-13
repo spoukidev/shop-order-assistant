@@ -1,0 +1,5 @@
+﻿sku,name,aliases,sizes,colors,price_dzd,in_stock
+HOOD-01,Hoodie oversize,"hoodie, sweat, سويت, هودي","S, M, L, XL","Noir, Blanc, Beige",3500,yes
+TEE-02,T-shirt basique,"tshirt, t-shirt, maillot, تيشرت","S, M, L, XL","Noir, Blanc",1500,yes
+JOG-03,Jogger cargo,"jogging, pantalon, سروال","S, M, L, XL","Noir, Beige, Kaki",2800,yes
+CAP-04,Casquette brodée,"casquette, cap, كاسكيطة",,"Noir, Blanc",1200,yes
