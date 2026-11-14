@@ -1,0 +1,8 @@
+{
+  "name": "shop-order-assistant",
+  "private": true,
+  "description": "n8n workflow that captures orders from WhatsApp and Instagram DMs",
+  "scripts": {
+    "test": "node test/run_tests.js && node test/check_workflow_sync.js"
+  }
+}

@@ -23,7 +23,7 @@ Every conversation is also logged in the Inbox sheet.
 - `shop-order-assistant.n8n.json`: the workflow (30 nodes), import it into n8n
 - `sheet/Products.csv`, `Delivery.csv`, `Orders.csv`, `Inbox.csv`: the four tabs of the Google Sheet, with sample data for a demo shop
 - `code/`: the Code-node source, readable on its own
-- `test/run_tests.js`: logic tests (`node test/run_tests.js`)
+- `test/run_tests.js`: logic tests; `test/check_workflow_sync.js` checks the workflow JSON matches `code/`. Run both with `npm test`
 
 ## Setup (about 30 minutes)
 
