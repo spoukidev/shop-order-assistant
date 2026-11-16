@@ -11,7 +11,7 @@
         -200
       ],
       "parameters": {
-        "content": "## Shop Order Assistant\nInstagram + WhatsApp orders, read by AI, priced by code, saved to Google Sheets, confirmed to the customer and pushed to the owner on Telegram.\n\n**Setup:** edit only **Shop settings**, then add 4 credentials: Google Sheets, OpenAI, Telegram, and Meta (Header Auth: `Authorization` = `Bearer <token>`).\n\nBuilt by Spouki · hamoudiahmediyad@gmail.com",
+        "content": "## Shop Order Assistant\nInstagram + WhatsApp orders, read by AI, priced by code, saved to Google Sheets, confirmed to the customer and pushed to the owner on Telegram.\n\n**Setup:** edit only **Shop settings**, then add 4 credentials: Google Sheets, OpenAI, Telegram, and Meta (Header Auth: `Authorization` = `Bearer <token>`).\n\nBuilt by Spouki · https://github.com/spoukidev",
         "width": 520,
         "height": 420,
         "color": 4

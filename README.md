@@ -1,8 +1,10 @@
 # Shop Order Assistant (Instagram + WhatsApp)
 
+[![CI](https://github.com/spoukidev/shop-order-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/spoukidev/shop-order-assistant/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 An n8n workflow for online shops that sell through DMs. A customer writes in Darija, French, Arabic or English; the workflow reads the message with AI, prices the order with plain code, saves it to Google Sheets, confirms it to the customer in their own language, and alerts the shop owner on Telegram.
 
-Built by Spouki · hamoudiahmediyad@gmail.com
+Built by Spouki · [github.com/spoukidev](https://github.com/spoukidev) · [spoukidev.github.io](https://spoukidev.github.io/)
 
 ## What it does
 
