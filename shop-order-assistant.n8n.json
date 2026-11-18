@@ -27,7 +27,7 @@
         -200
       ],
       "parameters": {
-        "content": "### 1 · Receive\nMeta posts every DM to the POST webhook. The GET webhook answers Meta's one-time verification.",
+        "content": "### 1 · Receive\nMeta posts every DM to the POST webhook; **Verify Meta signature** drops anything Meta did not sign. The GET webhook answers Meta's one-time verification.",
         "width": 560,
         "height": 700
       }
@@ -44,9 +44,24 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "shop-orders",
-        "options": {}
+        "options": {
+          "rawBody": true
+        }
       },
       "webhookId": "13ae3c78-c6ce-4468-b0da-8f35c4e10b4b"
+    },
+    {
+      "id": "213db85a-4523-445e-98ce-97240ba5cc67",
+      "name": "Verify Meta signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -130,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Verify Meta signature: drops any POST that Meta did not sign, so nobody who\n// finds the webhook URL can inject fake orders or Telegram alerts.\n// Meta signs every webhook with your app secret (HMAC-SHA256 of the raw body,\n// sent in the X-Hub-Signature-256 header).\n// Needs: \"Raw Body\" enabled on the Incoming message webhook (already set) and\n// NODE_FUNCTION_ALLOW_BUILTIN=crypto in your n8n environment.\nconst APP_SECRET = 'CHANGE_ME_META_APP_SECRET';   // Meta app → Settings → Basic → App secret\n// Unsigned test payloads ({ \"channel\": \"test\", ... }) are only accepted while this\n// is true. Set it to false once the shop is live.\nconst ALLOW_UNSIGNED_TEST_MESSAGES = true;\n\nconst crypto = require('crypto');\nconst item = $input.first();\nconst headers = item.json.headers || {};\nconst body = item.json.body || {};\nconst fromMeta = body.object !== undefined || headers['x-hub-signature-256'] !== undefined;\n\nif (!fromMeta) return ALLOW_UNSIGNED_TEST_MESSAGES ? [item] : [];\n\nif (!APP_SECRET || APP_SECRET.startsWith('CHANGE_ME')) {\n  throw new Error('Set APP_SECRET in the \"Verify Meta signature\" node to your Meta app secret');\n}\nif (!item.binary || !item.binary.data) {\n  throw new Error('Enable Options → Raw Body on the \"Incoming message\" webhook');\n}\n\nconst raw = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst header = String(headers['x-hub-signature-256'] || '');\nconst expected = 'sha256=' + crypto.createHmac('sha256', APP_SECRET).update(raw).digest('hex');\nconst a = Buffer.from(header);\nconst b = Buffer.from(expected);\nif (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return [];   // forged or corrupted: stop here\n\nreturn [item];\n"
+      }
     },
     {
       "id": "71f89bfb-09b3-4256-a27d-72db230339f5",
@@ -86,7 +101,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -60,
+        60,
         0
       ],
       "parameters": {
@@ -1196,7 +1211,7 @@
       "main": [
         [
           {
-            "node": "Shop settings",
+            "node": "Verify Meta signature",
             "type": "main",
             "index": 0
           }
@@ -1491,6 +1506,17 @@
         [
           {
             "node": "Test mode: not sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Meta signature": {
+      "main": [
+        [
+          {
+            "node": "Shop settings",
             "type": "main",
             "index": 0
           }
