@@ -22,10 +22,10 @@ Every conversation is also logged in the Inbox sheet.
 
 ## Files
 
-- `shop-order-assistant.n8n.json`: the workflow (30 nodes), import it into n8n
+- `shop-order-assistant.n8n.json`: the workflow (31 nodes), import it into n8n
 - `sheet/Products.csv`, `Delivery.csv`, `Orders.csv`, `Inbox.csv`: the four tabs of the Google Sheet, with sample data for a demo shop
 - `code/`: the Code-node source, readable on its own
-- `test/run_tests.js`: logic tests; `test/check_workflow_sync.js` checks the workflow JSON matches `code/`. Run both with `npm test`
+- `test/run_tests.js`: logic tests; `test/verify_signature_tests.js`: webhook signature tests; `test/check_workflow_sync.js` checks the workflow JSON matches `code/`. Run them all with `npm test`
 
 ## Setup (about 30 minutes)
 
@@ -38,11 +38,12 @@ Every conversation is also logged in the Inbox sheet.
    - Telegram (a bot from @BotFather) on the two Telegram nodes
    - Header Auth on the two "Send … reply" nodes: name `Authorization`, value `Bearer <your Meta access token>`
 5. **Verify token.** In **Answer verification**, replace `CHANGE_ME_VERIFY_TOKEN` with a secret word of your choice.
-6. **Connect Meta.** In your Meta app, set the webhook URL to `https://<your-n8n-domain>/webhook/shop-orders` with the same verify token, and subscribe to message events for WhatsApp and/or Instagram. Then activate the workflow.
+6. **App secret.** In **Verify Meta signature**, replace `CHANGE_ME_META_APP_SECRET` with your Meta app secret (Meta app → Settings → Basic). Every POST must carry a valid `X-Hub-Signature-256` from Meta, otherwise it is dropped, so nobody who finds the webhook URL can inject fake orders. This node uses Node's `crypto` module: start n8n with `NODE_FUNCTION_ALLOW_BUILTIN=crypto`.
+7. **Connect Meta.** In your Meta app, set the webhook URL to `https://<your-n8n-domain>/webhook/shop-orders` with the same verify token, and subscribe to message events for WhatsApp and/or Instagram. Then activate the workflow.
 
 ## Test it without Meta
 
-Activate the workflow and send a test message. Test messages go through the whole flow and are logged, but no reply is sent:
+Activate the workflow and send a test message. Test messages go through the whole flow and are logged, but no reply is sent. Unsigned test messages are accepted only while `ALLOW_UNSIGNED_TEST_MESSAGES` is `true` in **Verify Meta signature**; set it to `false` once the shop is live, since test messages still create orders and Telegram alerts:
 
 ```bash
 curl -X POST https://<your-n8n-domain>/webhook/shop-orders \

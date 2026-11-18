@@ -3,6 +3,6 @@
   "private": true,
   "description": "n8n workflow that captures orders from WhatsApp and Instagram DMs",
   "scripts": {
-    "test": "node test/run_tests.js && node test/check_workflow_sync.js"
+    "test": "node test/run_tests.js && node test/verify_signature_tests.js && node test/check_workflow_sync.js"
   }
 }

@@ -9,6 +9,7 @@ const workflow = JSON.parse(fs.readFileSync(path.join(root, 'shop-order-assistan
 
 // Code node name -> source file. Keep in sync when adding a Code node.
 const MAP = {
+  'Verify Meta signature': 'verify_signature.js',
   'Shop settings': 'settings.js',
   'Normalize message': 'normalize.js',
   'Build AI context': 'build_context.js',
